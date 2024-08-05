@@ -8,6 +8,8 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 
+import { AuthProvider } from "./context/AuthContext";
+
 export const meta: MetaFunction = () => {
   return [
     { charset: "utf-8" },
@@ -16,19 +18,22 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+
 export default function App() {
   return (
-    <html lang="en">
+      <html lang="en">
       <head>
         <Meta />
         <Links />
       </head>
       <body>
+      <AuthProvider>
         <Outlet />
-        <ScrollRestoration />
-        <Scripts />
-        <LiveReload />
+      </AuthProvider>
+      <ScrollRestoration />
+      <Scripts />
+      <LiveReload />
       </body>
-    </html>
+      </html>
   );
 }
