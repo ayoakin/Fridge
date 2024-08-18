@@ -32,7 +32,6 @@ export default function App() {
       </AuthProvider>
       <ScrollRestoration />
       <Scripts />
-      <LiveReload />
       </body>
       </html>
   );

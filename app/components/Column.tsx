@@ -1,32 +1,28 @@
 import React from 'react';
-import { useDrop } from 'react-dnd';
 import Task from './Task';
 
-interface ColumnProps {
-  status: "todo" | "doing" | "done";
-  tasks: {
+interface ColumnData {
+  id: string;
+  name: string;
+  tickets: Array<{
     id: string;
     title: string;
-    status: string;
-    comments: string[];
-  }[];
-  moveTask: (id: string, status: "todo" | "doing" | "done") => void;
-  onTaskClick: (task: any) => void;
+    description: string;
+  }>;
 }
 
-const Column: React.FC<ColumnProps> = ({ status, tasks, moveTask, onTaskClick }) => {
-  const [, drop] = useDrop({
-    accept: 'TASK',
-    drop: (item: { id: string }) => moveTask(item.id, status),
-  });
+interface ColumnProps {
+  data: ColumnData;
+}
 
+const Column: React.FC<ColumnProps> = ({ data }) => {
   return (
-    <div ref={drop} style={{ width: '30%', minHeight: '300px', border: '1px solid #ccc', padding: '10px' }}>
-      <h2 style={{ textTransform: 'capitalize' }}>{status}</h2>
-      {tasks.map((task) => (
-        <Task key={task.id} task={task} onClick={() => onTaskClick(task)} />
-      ))}
-    </div>
+      <div style={{ minWidth: '200px', background: '#f0f0f0', padding: '10px', margin: '10px' }}>
+        <h3>{data.name}</h3>
+        {data.tickets.map(ticket => (
+            <Task key={ticket.id} data={ticket} />
+        ))}
+      </div>
   );
 };
 
