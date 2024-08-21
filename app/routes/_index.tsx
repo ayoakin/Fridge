@@ -1,108 +1,61 @@
-import { useState } from "react";
-import { DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
-import Board from "~/components/Board";
-import { useNavigate } from "@remix-run/react";
-import { json, redirect } from "@remix-run/node";
-import type { LoaderFunction } from "@remix-run/node";
-import { sessionStorage } from "~/utils/session.server";
-
-interface Task {
-  id: string;
-  title: string;
-  status: "todo" | "doing" | "done";
-  comments: string[];
-}
-
-export const loader: LoaderFunction = async ({ request }) => {
-  const session = await sessionStorage.getSession(request.headers.get("Cookie"));
-  const userEmail = session.get("userEmail");
-
-  if (!userEmail) {
-    return redirect("/login");
-  }
-
-  return json({ userEmail });
-};
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Board, { BoardData } from "~/components/Board";
+import { getBoard, createBoard, logout } from "~/utils/api";
 
 export default function Index() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newComment, setNewComment] = useState<string>("");
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [boardData, setBoardData] = useState<BoardData | null>(null);
+  const [error, setError] = useState<string>("");
   const navigate = useNavigate();
 
-  const addTask = () => {
-    if (newTaskTitle.trim() !== "") {
-      const newTask: Task = {
-        id: Date.now().toString(),
-        title: newTaskTitle,
-        status: "todo",
-        comments: []
-      };
-      setTasks([...tasks, newTask]);
-      setNewTaskTitle("");
-    }
-  };
-
-  const addComment = (taskId: string) => {
-    if (newComment.trim() !== "") {
-      setTasks(tasks.map(task =>
-          task.id === taskId
-              ? { ...task, comments: [...task.comments, newComment] }
-              : task
-      ));
-      setNewComment("");
-    }
-  };
-
-  const moveTask = (taskId: string, newStatus: "todo" | "doing" | "done") => {
-    setTasks(tasks.map(task =>
-        task.id === taskId ? { ...task, status: newStatus } : task
-    ));
-  };
-
-  const handleLogout = async () => {
-    const response = await fetch("/logout", { method: "POST" });
-    if (response.ok) {
+  useEffect(() => {
+    const token = localStorage.getItem('teamToken');
+    if (!token) {
       navigate("/login");
+      return;
     }
+
+    const fetchBoard = async () => {
+      try {
+        let boardId = localStorage.getItem('boardId');
+        if (!boardId) {
+          const newBoard = await createBoard("Default Board");
+          boardId = newBoard.board_id;
+          if (boardId) {
+            localStorage.setItem('boardId', boardId);
+          } else {
+            throw new Error("Failed to create new board");
+          }
+        }
+        const data = await getBoard(boardId);
+        setBoardData(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch board");
+      }
+    };
+
+    fetchBoard();
+  }, [navigate]);
+
+  const handleBoardUpdate = (newData: BoardData) => {
+    setBoardData(newData);
   };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  if (error) return <div>Error: {error}</div>;
+  if (!boardData) return <div>Loading...</div>;
 
   return (
-      <DndProvider backend={HTML5Backend}>
-        <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.4" }}>
+      <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.4" }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1>Fridge - Minimal Scrum Board</h1>
-          <button onClick={handleLogout}>Logout</button>
-          <div>
-            <input
-                type="text"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="Enter new task title"
-            />
-            <button onClick={addTask}>Add Task</button>
-          </div>
-          <Board tasks={tasks} moveTask={moveTask} onTaskClick={setSelectedTask} />
-          {selectedTask && (
-              <div style={{ marginTop: "20px" }}>
-                <h2>{selectedTask.title}</h2>
-                <h3>Comments:</h3>
-                <ul>
-                  {selectedTask.comments.map((comment, index) => (
-                      <li key={index}>{comment}</li>
-                  ))}
-                </ul>
-                <input
-                    type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Add a comment"
-                />
-                <button onClick={() => addComment(selectedTask.id)}>Add Comment</button>
-              </div>
-          )}
+          <button onClick={handleLogout} style={{ padding: '10px', cursor: 'pointer' }}>Logout</button>
         </div>
-      </DndProvider>
+        <Board data={boardData} onUpdate={handleBoardUpdate} />
+      </div>
   );
 }

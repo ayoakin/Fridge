@@ -1,39 +1,20 @@
-import type { MetaFunction } from "@remix-run/node";
-import {
-  Links,
-  LiveReload,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "@remix-run/react";
-
-import { AuthProvider } from "./context/AuthContext";
-
-export const meta: MetaFunction = () => {
-  return [
-    { charset: "utf-8" },
-    { title: "Fridge - Minimal Scrum Board" },
-    { name: "viewport", content: "width=device-width,initial-scale=1" },
-  ];
-};
-
+import { Links, LiveReload, Meta, Outlet, Scripts, ScrollRestoration } from "@remix-run/react";
 
 export default function App() {
   return (
-      <html lang="en">
+    <html lang="en">
       <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
         <Meta />
         <Links />
       </head>
       <body>
-      <AuthProvider>
         <Outlet />
-      </AuthProvider>
-      <ScrollRestoration />
-      <Scripts />
-      <LiveReload />
+        <ScrollRestoration />
+        <Scripts />
+        <LiveReload />
       </body>
-      </html>
+    </html>
   );
 }

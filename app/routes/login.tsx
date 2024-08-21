@@ -1,98 +1,75 @@
 import { useState } from "react";
-import { Form, useActionData, useNavigation } from "@remix-run/react";
-import { json, redirect, createCookieSessionStorage } from "@remix-run/node";
-import type { ActionFunction, LoaderFunction } from "@remix-run/node";
-
-// Create a session storage
-const sessionStorage = createCookieSessionStorage({
-    cookie: {
-        name: "fridge_session",
-        secure: process.env.NODE_ENV === "production",
-        secrets: ["s3cr3t"], // replace with a real secret
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        httpOnly: true,
-    },
-});
+import { Form, useNavigation, useSubmit } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import type { ActionFunction } from "@remix-run/node";
+import { login, sendLoginEmail } from "~/utils/api";
+import { useNavigate } from "react-router-dom";
 
 export const action: ActionFunction = async ({ request }) => {
     const formData = await request.formData();
-    const email = formData.get("email");
-    const code = formData.get("code");
+    const intent = formData.get("intent");
 
-    if (code) {
-        // Verify the code
-        const response = await fetch("https://api.justdecision.com/v1/user/extension_login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, token: code }),
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            // Store tokens in session
-            const session = await sessionStorage.getSession();
-            session.set("openAiToken", data.open_ai_token);
-            session.set("teamToken", data.team_token);
-            session.set("userEmail", email);
-
-            // Redirect to the main page with the session
-            return redirect("/", {
-                headers: {
-                    "Set-Cookie": await sessionStorage.commitSession(session),
-                },
-            });
-        } else {
-            return json({ error: "Invalid code" });
-        }
-    } else {
-        // Send login email
-        const response = await fetch("https://api.justdecision.com/v1/user/email_simple_login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email }),
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            return json({ emailSent: true });
-        } else {
-            return json({ error: "Failed to send login email" });
-        }
+    if (intent === "sendEmail") {
+        return json({ emailSent: true });
+    } else if (intent === "login") {
+        return json({ loggedIn: true });
     }
+
+    return json({ error: "Invalid action" });
 };
 
-// Add a loader to check if the user is already logged in
-export const loader: LoaderFunction = async ({ request }) => {
-    const session = await sessionStorage.getSession(request.headers.get("Cookie"));
-    if (session.has("openAiToken") && session.has("teamToken")) {
-        // User is already logged in, redirect to the main page
-        return redirect("/");
-    }
-    return null;
-};
 export default function Login() {
     const [email, setEmail] = useState("");
     const [code, setCode] = useState("");
-    const actionData = useActionData<typeof action>();
+    const [emailSent, setEmailSent] = useState(false);
+    const [error, setError] = useState("");
     const navigation = useNavigation();
+    const submit = useSubmit();
+    const navigate = useNavigate();
 
     const isSubmitting = navigation.state === "submitting";
+
+    const handleSendEmail = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await sendLoginEmail(email);
+            setEmailSent(true);
+            setError("");
+            submit({ intent: "sendEmail" }, { method: "post" });
+        } catch (err) {
+            setError("Failed to send login email");
+        }
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await login(email, code);
+            navigate('/');
+        } catch (err) {
+            setError("Invalid code");
+        }
+    };
 
     return (
         <div>
             <h1>Login</h1>
-            <Form method="post">
-                <input
-                    type="email"
-                    name="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    required
-                />
-                {actionData?.emailSent && (
+            {!emailSent ? (
+                <Form onSubmit={handleSendEmail}>
+                    <input
+                        type="email"
+                        name="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter your email"
+                        required
+                    />
+                    <button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? "Sending..." : "Send Login Link"}
+                    </button>
+                </Form>
+            ) : (
+                <Form onSubmit={handleLogin}>
                     <input
                         type="text"
                         name="code"
@@ -101,16 +78,12 @@ export default function Login() {
                         placeholder="Enter verification code"
                         required
                     />
-                )}
-                <button type="submit" disabled={isSubmitting}>
-                    {isSubmitting
-                        ? "Submitting..."
-                        : actionData?.emailSent
-                            ? "Verify Code"
-                            : "Send Login Link"}
-                </button>
-            </Form>
-            {actionData?.error && <p>{actionData.error}</p>}
+                    <button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? "Verifying..." : "Verify Code"}
+                    </button>
+                </Form>
+            )}
+            {error && <p>{error}</p>}
         </div>
     );
 }
