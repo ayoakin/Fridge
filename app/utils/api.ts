@@ -1,77 +1,94 @@
-import { json } from "@remix-run/node";
-import { sessionStorage } from "~/utils/session.server";
+import axios from 'axios';
 
-const BASE_URL = "https://api.justdecision.com"
-// const BASE_URL = "http://localhost:8080";
+const BASE_URL = "https://api.justdecision.com";
 
-async function getSessionData(request: Request) {
-    const session = await sessionStorage.getSession(request.headers.get("Cookie"));
-    return {
-        token: session.get("teamToken"),
-        userEmail: session.get("userEmail")
-    };
-}
+// Use localStorage for token storage
+const getToken = () => localStorage.getItem('teamToken');
+const setToken = (token: string) => localStorage.setItem('teamToken', token);
+const removeToken = () => localStorage.removeItem('teamToken');
 
-async function apiCall(request: Request, endpoint: string, method: string, data?: any) {
-    let { token, userEmail } = await getSessionData(request);
-    // token = 'cc43e54b-bc3f-4333-9f90-20b2d84a1c32'
-    console.log("API call", endpoint, method, data);
-    const headers: HeadersInit = {
-        "Content-Type": "application/json",
-    };
+const api = axios.create({
+    baseURL: BASE_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
 
+// Add a request interceptor
+api.interceptors.request.use((config) => {
+    const token = getToken();
     if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
+        config.headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-        method,
-        headers,
-        body: data ? JSON.stringify(data) : undefined,
-    });
-    if (!response.ok) {
-        console.error("API call failed", response.status, response.statusText);
-        throw json({ error: "API call failed" }, { status: response.status });
-    }
-    return response.json();
-}
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
 
-export async function createTicket(request: Request, boardId: string, title: string, description: string) {
-    const { userEmail } = await getSessionData(request);
-    return apiCall(request, "/scrum/create-ticket", "POST", {
+export const sendLoginEmail = async (email: string) => {
+    const response = await api.post('/v1/user/email_simple_login', { email });
+    return response.data;
+};
+
+export const login = async (email: string, code: string) => {
+    const response = await api.post('/v1/user/extension_login', { email, token: code });
+    if (response.data.team_token) {
+        setToken(response.data.team_token);
+        localStorage.setItem('userEmail', email);
+    }
+    return response.data;
+};
+
+export const logout = () => {
+    removeToken();
+    localStorage.removeItem('userEmail');
+};
+
+export const createBoard = async (boardName: string) => {
+    const userEmail = localStorage.getItem('userEmail');
+    if (!userEmail) {
+        throw new Error('User email not found. Please log in again.');
+    }
+    const response = await api.post('/scrum/create-board', {
+        board_name: boardName,
+        user_email: userEmail
+    });
+    return response.data;
+};
+
+export const getBoard = async (boardId: string) => {
+    const response = await api.get(`/scrum/get-board/${boardId}`);
+    return response.data;
+};
+
+export const createTicket = async (boardId: string, title: string, description: string) => {
+    const response = await api.post('/scrum/create-ticket', {
         board_id: boardId,
         title,
         description,
-        assignee_email: userEmail,
-        user_email: userEmail
+        assignee_email: localStorage.getItem('userEmail'),
+        user_email: localStorage.getItem('userEmail')
     });
-}
+    return response.data;
+};
 
-export async function sendLoginEmail(email: string) {
-    return apiCall({} as Request, "/v1/user/email_simple_login", "POST", { email });
-}
+export const moveTicket = async (ticketId: string, newColumnId: string) => {
+    const response = await api.patch('/scrum/move-ticket', { ticket_id: ticketId, new_column_id: newColumnId });
+    return response.data;
+};
 
-export async function login(email: string, code: string) {
-    return apiCall({} as Request, "/v1/user/extension_login", "POST", { email, token: code });
-}
+export const addComment = async (ticketId: string, content: string) => {
+    const response = await api.post('/scrum/add-comment', {
+        ticket_id: ticketId,
+        content,
+        user_email: localStorage.getItem('userEmail')
+    });
+    return response.data;
+};
 
-export async function createBoard(request: Request, boardName: string) {
-    return apiCall(request, "/scrum/create-board", "POST", { board_name: boardName });
-}
-
-export async function getBoard(request: Request, boardId: string) {
-    return apiCall(request, `/scrum/get-board/${boardId}`, "GET");
-}
-
-export async function moveTicket(request: Request, ticketId: string, newColumnId: string) {
-    return apiCall(request, "/scrum/move-ticket", "PATCH", { ticket_id: ticketId, new_column_id: newColumnId });
-}
-
-export async function addComment(request: Request, ticketId: string, content: string) {
-    const { userEmail } = await getSessionData(request);
-    return apiCall(request, "/scrum/add-comment", "POST", { ticket_id: ticketId, content, user_email: userEmail });
-}
-
-export async function archiveBoard(request: Request, boardId: string) {
-    const { userEmail } = await getSessionData(request);
-    return apiCall(request, `/scrum/archive-board/${boardId}`, "PATCH", { user_email: userEmail });
-}
+export const archiveBoard = async (boardId: string) => {
+    const response = await api.patch(`/scrum/archive-board/${boardId}`, {
+        user_email: localStorage.getItem('userEmail')
+    });
+    return response.data;
+};

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Form } from '@remix-run/react';
 import Column from './Column';
+import { createTicket } from '~/utils/api';
 
 export interface BoardData {
     id: string;
@@ -18,34 +18,66 @@ export interface BoardData {
 
 interface BoardProps {
     data: BoardData;
+    onUpdate: (newData: BoardData) => void;
 }
 
-const Board: React.FC<BoardProps> = ({ data }) => {
+const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
     const [newTicketTitle, setNewTicketTitle] = useState('');
     const [newTicketDescription, setNewTicketDescription] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const newTicket = await createTicket(data.id, newTicketTitle, newTicketDescription);
+
+            // Update the board data with the new ticket
+            const updatedData = {
+                ...data,
+                columns: data.columns.map(column =>
+                    column.id === data.columns[0].id // Assuming new tickets are added to the first column
+                        ? { ...column, tickets: [...column.tickets, newTicket] }
+                        : column
+                )
+            };
+
+            onUpdate(updatedData);
+            setNewTicketTitle('');
+            setNewTicketDescription('');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to create ticket');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <div>
             <h2>{data.name}</h2>
-            <Form method="post">
+            <form onSubmit={handleSubmit}>
                 <input
                     type="text"
-                    name="title"
                     value={newTicketTitle}
                     onChange={(e) => setNewTicketTitle(e.target.value)}
                     placeholder="New ticket title"
+                    required
                 />
                 <input
                     type="text"
-                    name="description"
                     value={newTicketDescription}
                     onChange={(e) => setNewTicketDescription(e.target.value)}
                     placeholder="New ticket description"
+                    required
                 />
-                <input type="hidden" name="action" value="createTicket" />
-                <input type="hidden" name="boardId" value={data.id} />
-                <button type="submit">Create Ticket</button>
-            </Form>
+                <button type="submit" disabled={isLoading}>
+                    {isLoading ? 'Creating...' : 'Create Ticket'}
+                </button>
+            </form>
+            {error && <p style={{ color: 'red' }}>{error}</p>}
             <div style={{ display: 'flex', justifyContent: 'space-around' }}>
                 {data.columns.map(column => (
                     <Column key={column.id} data={column} />

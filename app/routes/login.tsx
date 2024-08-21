@@ -1,80 +1,75 @@
 import { useState } from "react";
-import { Form, useActionData, useNavigation } from "@remix-run/react";
-import { json, redirect, createCookieSessionStorage } from "@remix-run/node";
-import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import { Form, useNavigation, useSubmit } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import type { ActionFunction } from "@remix-run/node";
 import { login, sendLoginEmail } from "~/utils/api";
-
-const sessionStorage = createCookieSessionStorage({
-    cookie: {
-        name: "fridge_session",
-        secure: process.env.NODE_ENV === "production",
-        secrets: ["s3cr3t"],
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 30,
-        httpOnly: true,
-    },
-});
+import { useNavigate } from "react-router-dom";
 
 export const action: ActionFunction = async ({ request }) => {
     const formData = await request.formData();
-    const email = formData.get("email") as string;
-    const code = formData.get("code") as string;
+    const intent = formData.get("intent");
 
-    if (code) {
-        try {
-            const data = await login(email, code);
-            const session = await sessionStorage.getSession();
-            session.set("openAiToken", data.open_ai_token);
-            session.set("teamToken", data.team_token);
-            session.set("userEmail", email);
-            return redirect("/", {
-                headers: {
-                    "Set-Cookie": await sessionStorage.commitSession(session),
-                },
-            });
-        } catch (error) {
-            return json({ error: "Invalid code" });
-        }
-    } else {
-        try {
-            const data = await sendLoginEmail(email);
-            return json({ emailSent: data.success, error: data.success ? null : "Failed to send login email" });
-        } catch (error) {
-            return json({ error: "Failed to send login email" });
-        }
+    if (intent === "sendEmail") {
+        return json({ emailSent: true });
+    } else if (intent === "login") {
+        return json({ loggedIn: true });
     }
-};
 
-export const loader: LoaderFunction = async ({ request }) => {
-    const session = await sessionStorage.getSession(request.headers.get("Cookie"));
-    if (session.has("openAiToken") && session.has("teamToken")) {
-        return redirect("/");
-    }
-    return null;
+    return json({ error: "Invalid action" });
 };
 
 export default function Login() {
     const [email, setEmail] = useState("");
     const [code, setCode] = useState("");
-    const actionData = useActionData<typeof action>();
+    const [emailSent, setEmailSent] = useState(false);
+    const [error, setError] = useState("");
     const navigation = useNavigation();
+    const submit = useSubmit();
+    const navigate = useNavigate();
 
     const isSubmitting = navigation.state === "submitting";
+
+    const handleSendEmail = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await sendLoginEmail(email);
+            setEmailSent(true);
+            setError("");
+            submit({ intent: "sendEmail" }, { method: "post" });
+        } catch (err) {
+            setError("Failed to send login email");
+        }
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await login(email, code);
+            navigate('/');
+        } catch (err) {
+            setError("Invalid code");
+        }
+    };
 
     return (
         <div>
             <h1>Login</h1>
-            <Form method="post">
-                <input
-                    type="email"
-                    name="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    required
-                />
-                {actionData?.emailSent && (
+            {!emailSent ? (
+                <Form onSubmit={handleSendEmail}>
+                    <input
+                        type="email"
+                        name="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter your email"
+                        required
+                    />
+                    <button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? "Sending..." : "Send Login Link"}
+                    </button>
+                </Form>
+            ) : (
+                <Form onSubmit={handleLogin}>
                     <input
                         type="text"
                         name="code"
@@ -83,16 +78,12 @@ export default function Login() {
                         placeholder="Enter verification code"
                         required
                     />
-                )}
-                <button type="submit" disabled={isSubmitting}>
-                    {isSubmitting
-                        ? "Submitting..."
-                        : actionData?.emailSent
-                            ? "Verify Code"
-                            : "Send Login Link"}
-                </button>
-            </Form>
-            {actionData?.error && <p>{actionData.error}</p>}
+                    <button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? "Verifying..." : "Verify Code"}
+                    </button>
+                </Form>
+            )}
+            {error && <p>{error}</p>}
         </div>
     );
 }

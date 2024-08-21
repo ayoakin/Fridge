@@ -1,12 +1,14 @@
-import type { ActionFunction } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
-import { sessionStorage } from "~/utils/session.server";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { logout } from "~/utils/api";
 
-export const action: ActionFunction = async ({ request }) => {
-    const session = await sessionStorage.getSession(request.headers.get("Cookie"));
-    return redirect("/login", {
-        headers: {
-            "Set-Cookie": await sessionStorage.destroySession(session),
-        },
-    });
-};
+export default function Logout() {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        logout();
+        navigate("/login");
+    }, [navigate]);
+
+    return <div>Logging out...</div>;
+}
