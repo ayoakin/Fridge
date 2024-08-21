@@ -1,10 +1,8 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useLoaderData } from "@remix-run/react";
-import { json, redirect } from "@remix-run/node";
-import type { LoaderFunction } from "@remix-run/node";
-import Board, { BoardData } from "~/components/Board";
+import { useLoaderData } from "@remix-run/react";
+import { json, redirect, LoaderFunction } from "@remix-run/node";
+import Board  from "~/components/Board";
 import { sessionStorage } from "~/utils/session.server";
-import { getBoard, createBoard } from "~/utils/api";
+import { getBoard, createBoard, createTicket } from "~/utils/api";
 
 export const loader: LoaderFunction = async ({ request }) => {
   const session = await sessionStorage.getSession(request.headers.get("Cookie"));
@@ -18,7 +16,7 @@ export const loader: LoaderFunction = async ({ request }) => {
 
   if (!boardId) {
     try {
-      const boardData = await createBoard("Default Board", teamToken);
+      const boardData = await createBoard(request, "Default Board");
       boardId = boardData.board_id;
       session.set("boardId", boardId);
       await sessionStorage.commitSession(session);
@@ -29,45 +27,40 @@ export const loader: LoaderFunction = async ({ request }) => {
   }
 
   try {
-    const boardData = await getBoard(boardId, teamToken);
-    return json({ boardData, teamToken });
+    const boardData = await getBoard(request, boardId);
+    return json({ boardData });
   } catch (error) {
     console.error("Failed to fetch board:", error);
     return json({ error: "Failed to fetch board" }, { status: 500 });
   }
 };
 
+
+export const action: ActionFunction = async ({ request }) => {
+  const formData = await request.formData();
+  const action = formData.get("action");
+
+  if (action === "createTicket") {
+    const boardId = formData.get("boardId") as string;
+    const title = formData.get("title") as string;
+    const description = formData.get("description") as string;
+    await createTicket(request, boardId, title, description);
+    return json({ success: true });
+  }
+
+  return json({ error: "Invalid action" }, { status: 400 });
+};
+
 export default function Index() {
-  const { boardData, teamToken, error } = useLoaderData<typeof loader>();
-  const [board, setBoard] = useState<BoardData | null>(boardData || null);
-  const navigate = useNavigate();
+  const { boardData, error } = useLoaderData<typeof loader>();
 
-  useEffect(() => {
-    if (boardData) {
-      setBoard(boardData);
-    }
-  }, [boardData]);
-
-  const handleLogout = async () => {
-    const response = await fetch("/logout", { method: "POST" });
-    if (response.ok) {
-      navigate("/login");
-    }
-  };
-
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
-
-  if (!board) {
-    return <div>Loading...</div>;
-  }
+  if (error) return <div>Error: {error}</div>;
+  if (!boardData) return <div>Loading...</div>;
 
   return (
       <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.4" }}>
         <h1>Fridge - Minimal Scrum Board</h1>
-        <button onClick={handleLogout}>Logout</button>
-        <Board data={board} />
+        <Board data={boardData} />
       </div>
   );
 }
