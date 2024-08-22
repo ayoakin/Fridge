@@ -2,18 +2,22 @@ import React, { useState } from 'react';
 import Column from './Column';
 import { createTicket } from '~/utils/api';
 
-export interface BoardData {
+interface Ticket {
+    id: string;
+    title: string;
+    description: string;
+}
+
+interface Column {
     id: string;
     name: string;
-    columns: Array<{
-        id: string;
-        name: string;
-        tickets: Array<{
-            id: string;
-            title: string;
-            description: string;
-        }>;
-    }>;
+    tickets: Ticket[];
+}
+
+interface BoardData {
+    id: string;
+    name: string;
+    columns: Column[];
 }
 
 interface BoardProps {
@@ -22,34 +26,26 @@ interface BoardProps {
 }
 
 const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
+    const [localData, setLocalData] = useState<BoardData>(data);
     const [newTicketTitle, setNewTicketTitle] = useState('');
     const [newTicketDescription, setNewTicketDescription] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
-
         try {
-            const newTicket = await createTicket(data.id, newTicketTitle, newTicketDescription);
-
-            // Update the board data with the new ticket
-            const updatedData = {
-                ...data,
-                columns: data.columns.map(column =>
-                    column.id === data.columns[0].id // Assuming new tickets are added to the first column
-                        ? { ...column, tickets: [...column.tickets, newTicket] }
-                        : column
-                )
-            };
-
+            const newTicket = await createTicket(localData.id, newTicketTitle, newTicketDescription);
+            const updatedColumns = localData.columns.map((column: Column, index: number) =>
+                index === 0 ? { ...column, tickets: [newTicket, ...column.tickets] } : column
+            );
+            const updatedData = {...localData, columns: updatedColumns};
+            setLocalData(updatedData);
             onUpdate(updatedData);
             setNewTicketTitle('');
             setNewTicketDescription('');
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to create ticket');
+            console.error(err);
         } finally {
             setIsLoading(false);
         }
@@ -57,7 +53,7 @@ const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
 
     return (
         <div>
-            <h2>{data.name}</h2>
+            <h2>{localData.name}</h2>
             <form onSubmit={handleSubmit}>
                 <input
                     type="text"
@@ -77,9 +73,8 @@ const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
                     {isLoading ? 'Creating...' : 'Create Ticket'}
                 </button>
             </form>
-            {error && <p style={{ color: 'red' }}>{error}</p>}
             <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-                {data.columns.map(column => (
+                {localData.columns.map(column => (
                     <Column key={column.id} data={column} />
                 ))}
             </div>
