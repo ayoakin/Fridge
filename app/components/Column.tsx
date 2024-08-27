@@ -21,7 +21,7 @@ const Column: React.FC<ColumnProps> = ({ data }) => {
   return (
       <div style={{ minWidth: '200px', background: '#f0f0f0', padding: '10px', margin: '10px' }}>
         <h3>{data.name}</h3>
-        {data.tickets.map(ticket => (
+        {[...data.tickets].reverse().map(ticket => (
             <Task key={ticket.id} data={ticket} />
         ))}
       </div>
