@@ -14,18 +14,19 @@ interface ColumnData {
     tickets: Ticket[];
 }
 
-interface BoardData {
+export type BoardData = {
     id: string;
     name: string;
     columns: ColumnData[];
-}
+};
 
 interface BoardProps {
+    data: BoardData;
     onUpdate: (newData: BoardData) => void;
 }
 
-const Board: React.FC<BoardProps> = ({ onUpdate }) => {
-    const [boardData, setBoardData] = useState<BoardData | null>(null);
+const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
+    const [boardData, setBoardData] = useState<BoardData>(data);
     const [newTicketTitle, setNewTicketTitle] = useState('');
     const [newTicketDescription, setNewTicketDescription] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -73,7 +74,6 @@ const Board: React.FC<BoardProps> = ({ onUpdate }) => {
         try {
             const newTicket = await createTicket(boardId, newTicketTitle, newTicketDescription);
             setBoardData(prevData => {
-                if (!prevData) return null;
                 const updatedColumns = [...prevData.columns];
                 if (updatedColumns.length > 0) {
                     updatedColumns[0] = {
@@ -81,9 +81,7 @@ const Board: React.FC<BoardProps> = ({ onUpdate }) => {
                         tickets: [newTicket, ...updatedColumns[0].tickets]
                     };
                 }
-                const updatedData = { ...prevData, columns: updatedColumns };
-                onUpdate(updatedData);
-                return updatedData;
+                return { ...prevData, columns: updatedColumns };
             });
             setNewTicketTitle('');
             setNewTicketDescription('');
@@ -126,7 +124,7 @@ const Board: React.FC<BoardProps> = ({ onUpdate }) => {
                     required
                 />
                 <button type="submit" disabled={isLoading}>
-                    {isLoading ? 'Creating...' : 'Create Ticket'}
+                    {isLoading ? 'Creating...' : 'Create Tdddicket'}
                 </button>
             </form>
             <div style={{ display: 'flex', justifyContent: 'space-around' }}>
