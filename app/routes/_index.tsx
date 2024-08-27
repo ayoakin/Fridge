@@ -9,12 +9,6 @@ export default function Index() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('teamToken');
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
     const fetchBoard = async () => {
       try {
         let boardId = localStorage.getItem('boardId');
@@ -27,20 +21,21 @@ export default function Index() {
             throw new Error("Failed to create new board");
           }
         }
-        const data = await getBoard(boardId);
-        setBoardData(data);
+        if (boardId) {
+          const data = await getBoard(boardId);
+          setBoardData(data);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch board");
       }
     };
 
-    fetchBoard();
+    const token = localStorage.getItem('teamToken');
+    if (!token) navigate("/login");
+    else fetchBoard();
   }, [navigate]);
 
-  const handleBoardUpdate = (newData: BoardData) => {
-    setBoardData(newData);
-  };
-
+  const handleBoardUpdate = (newData: BoardData) => setBoardData(newData);
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -50,12 +45,12 @@ export default function Index() {
   if (!boardData) return <div>Loading...</div>;
 
   return (
-      <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.4" }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1>Fridge - Minimal Scrum Board</h1>
-          <button onClick={handleLogout} style={{ padding: '10px', cursor: 'pointer' }}>Logout</button>
-        </div>
-        <Board data={boardData} onUpdate={handleBoardUpdate} />
+    <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.4" }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>Fridge - Minimal Scrum Board</h1>
+        <button onClick={handleLogout} style={{ padding: '10px', cursor: 'pointer' }}>Logout</button>
       </div>
+      <Board data={boardData} onUpdate={handleBoardUpdate} />
+    </div>
   );
 }

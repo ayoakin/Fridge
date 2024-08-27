@@ -1,14 +1,16 @@
 import React from 'react';
 import Task from './Task';
 
+interface Ticket {
+  id: string;
+  title: string;
+  description: string;
+}
+
 interface ColumnData {
   id: string;
   name: string;
-  tickets: Array<{
-    id: string;
-    title: string;
-    description: string;
-  }>;
+  tickets: Ticket[];
 }
 
 interface ColumnProps {
