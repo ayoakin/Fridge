@@ -34,8 +34,19 @@ const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        const fetchData = async () => {
+            const boardId = localStorage.getItem('boardId');
+            if (boardId) {
+                const data = await getBoard(boardId);
+                console.log('Received board data:', data);
+                setBoardData(data);
+            }
+        };
+        fetchData();
+    }, [boardData]);
+
+    useEffect(() => {
         const boardId = localStorage.getItem('boardId');
-        console.log('Board component mounted. boardId from localStorage:', boardId);
 
         const loadBoardData = async () => {
             setIsBoardLoading(true);
@@ -46,12 +57,10 @@ const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
                 return;
             }
             try {
-                console.log('Fetching board data for boardId:', boardId);
                 const data = await getBoard(boardId);
                 console.log('Received board data:', data);
                 setBoardData(data);
             } catch (error) {
-                console.error('Failed to fetch board data:', error);
                 setError('Failed to fetch board data. Please try again later.');
             } finally {
                 setIsBoardLoading(false);
@@ -72,17 +81,19 @@ const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
 
         setIsLoading(true);
         try {
+            console.log('Creating new ticket:', { title: newTicketTitle, description: newTicketDescription });
             const newTicket = await createTicket(boardId, newTicketTitle, newTicketDescription);
-            setBoardData(prevData => {
-                const updatedColumns = [...prevData.columns];
-                if (updatedColumns.length > 0) {
-                    updatedColumns[0] = {
-                        ...updatedColumns[0],
-                        tickets: [newTicket, ...updatedColumns[0].tickets]
-                    };
-                }
-                return { ...prevData, columns: updatedColumns };
-            });
+            console.log('New ticket created:', newTicket);
+            
+            const updatedBoardData = {
+                ...boardData,
+                columns: boardData.columns.map((column, index) => 
+                    index === 0 ? { ...column, tickets: [newTicket, ...column.tickets] } : column
+                )
+            };
+            console.log('Updating board data with new ticket:', updatedBoardData);
+            setBoardData(updatedBoardData);
+            onUpdate(updatedBoardData); // Notify parent component of the update
             setNewTicketTitle('');
             setNewTicketDescription('');
         } catch (err) {
@@ -124,7 +135,7 @@ const Board: React.FC<BoardProps> = ({ data, onUpdate }) => {
                     required
                 />
                 <button type="submit" disabled={isLoading}>
-                    {isLoading ? 'Creating...' : 'Create Tdddicket'}
+                    {isLoading ? 'Creating...' : 'Create Ticket'}
                 </button>
             </form>
             <div style={{ display: 'flex', justifyContent: 'space-around' }}>
